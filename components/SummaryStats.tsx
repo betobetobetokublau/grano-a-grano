@@ -2,9 +2,10 @@
  * Barra de 3 stats arriba del home: cafes activos, por vencer (rojo si > 0),
  * gramos totales. Responde la pregunta "que tengo?" en 2 segundos.
  *
- * Solo display, sin interaccion.
+ * Solo display, sin interaccion. Computa "por vencer" al render.
  */
 
+import { daysUntilExpiration } from "@/lib/dates";
 import type { CoffeeWithComputed } from "@/types/coffee";
 
 type Props = {
@@ -12,10 +13,12 @@ type Props = {
 };
 
 export function SummaryStats({ coffees }: Props) {
+  const now = new Date();
   const active = coffees.filter((c) => c.quantity_grams > 0);
-  const expiringSoon = active.filter(
-    (c) => c.days_left !== null && c.days_left < 7,
-  );
+  const expiringSoon = active.filter((c) => {
+    if (c.expires_at === null) return false;
+    return daysUntilExpiration(c.expires_at, now) < 7;
+  });
   const totalGrams = active.reduce((sum, c) => sum + c.quantity_grams, 0);
 
   return (

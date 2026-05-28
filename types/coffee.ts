@@ -3,17 +3,18 @@
  * mas algunos helpers de UI.
  */
 
-import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
+import type { Tables, TablesInsert } from "@/lib/database.types";
 
 export type Coffee = Tables<"coffees">;
 export type CoffeeInsert = TablesInsert<"coffees">;
-export type CoffeeUpdate = TablesUpdate<"coffees">;
 
 /**
- * Coffee con campos derivados (computados client-side, no se almacenan).
+ * Coffee enriquecido con campos derivados estables (no dependen de "now").
  * Se construye con enrichCoffee() en hooks/useCoffees.ts.
+ *
+ * NOTA: days_left NO esta aqui porque depende de "hoy" y se cachearia stale.
+ * Los componentes lo computan al render con daysUntilExpiration(expires_at).
  */
 export type CoffeeWithComputed = Coffee & {
   expires_at: string | null; // computeExpiration()
-  days_left: number | null; // daysUntilExpiration(expires_at), null si expires_at es null
 };

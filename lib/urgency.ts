@@ -13,15 +13,17 @@ export type UrgencyLevel =
   | "green";
 
 /**
- * - daysLeft < 0  → expired  (gris, strikethrough en la card)
- * - 0-3           → red      (urgente)
- * - 3-7           → orange
- * - 7-14          → yellow
- * - > 14          → green
+ * - daysLeft = null → green (sin fecha, asumimos en buen estado)
+ * - daysLeft < 0    → expired  (gris, strikethrough en la card)
+ * - 0-3             → red      (urgente)
+ * - 3-7             → orange
+ * - 7-14            → yellow
+ * - > 14            → green
  *
  * Los limites son inclusivos por la izquierda: 3 dias = orange (no red).
  */
-export function urgencyLevel(daysLeft: number): UrgencyLevel {
+export function urgencyLevel(daysLeft: number | null): UrgencyLevel {
+  if (daysLeft === null) return "green";
   if (daysLeft < 0) return "expired";
   if (daysLeft < 3) return "red";
   if (daysLeft < 7) return "orange";
@@ -48,3 +50,18 @@ export const URGENCY_TEXT_CLASS: Record<UrgencyLevel, string> = {
   yellow: "text-urgency-yellow",
   green: "text-urgency-green",
 };
+
+import { daysUntilExpiration } from "./dates";
+
+/**
+ * Helper que se llama en CADA render para obtener daysLeft + urgency frescos
+ * (importante porque "hoy" cambia y no queremos cachear).
+ */
+export function getCoffeeUrgency(
+  coffee: { expires_at: string | null },
+  now: Date = new Date(),
+): { daysLeft: number | null; level: UrgencyLevel } {
+  const daysLeft =
+    coffee.expires_at === null ? null : daysUntilExpiration(coffee.expires_at, now);
+  return { daysLeft, level: urgencyLevel(daysLeft) };
+}

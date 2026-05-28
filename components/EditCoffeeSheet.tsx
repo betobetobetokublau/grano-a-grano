@@ -1,31 +1,33 @@
 "use client";
 
 /**
- * Bottom sheet con formulario para agregar un cafe nuevo.
+ * Bottom sheet para editar un cafe existente.
  *
- * Comportamiento clave:
- * - Auto-calculo de vencimiento en vivo (cuando hay roast_date)
- * - Quick-fill buttons de cantidad (250 / 340 / 454)
- * - Sin optimistic update — espera respuesta del server antes de cerrar
- * - Validaciones soft via min/max en inputs date
+ * Estructura igual a AddCoffeeSheet pero:
+ * - Pre-llenado desde la prop `coffee`
+ * - Llama onUpdate(id, updates) en vez de insert
+ * - Submit label "Guardar cambios"
+ * - Validaciones soft (permite mantener fechas pasadas existentes)
+ *
+ * Decision: duplicacion controlada con AddCoffeeSheet en vez de un CoffeeForm
+ * compartido. Razon: los flujos de Add e Edit difieren en validacion + estado
+ * inicial + submit semantico. Un wrapper compartido ocultaba estas diferencias.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, subYears } from "date-fns";
 import { toast } from "sonner";
 
 import { computeExpiration } from "@/lib/expiration";
-import type { CoffeeInsert } from "@/types/coffee";
+import type { Coffee } from "@/types/coffee";
 
 import { BottomSheet } from "./BottomSheet";
 import { Field } from "./Field";
 
 type Props = {
-  open: boolean;
+  coffee: Coffee | null;
   onClose: () => void;
-  onSubmit: (
-    input: Omit<CoffeeInsert, "user_id" | "id" | "created_at">,
-  ) => Promise<void>;
+  onUpdate: (id: string, updates: Partial<Coffee>) => Promise<void>;
 };
 
 const QUICK_GRAMS = [250, 340, 454];
@@ -35,19 +37,17 @@ function safeNumber(value: string, fallback = 0): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
-  // TODAY/ONE_YEAR_AGO se recomputan cuando el sheet se abre,
-  // evitando drift past midnight con tab abierta toda la noche.
+export function EditCoffeeSheet({ coffee, onClose, onUpdate }: Props) {
   const { TODAY, ONE_YEAR_AGO } = useMemo(() => {
     return {
       TODAY: format(new Date(), "yyyy-MM-dd"),
       ONE_YEAR_AGO: format(subYears(new Date(), 1), "yyyy-MM-dd"),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [coffee?.id]);
 
   const [name, setName] = useState("");
-  const [quantityGrams, setQuantityGrams] = useState<number>(340);
+  const [quantityGrams, setQuantityGrams] = useState<number>(0);
   const [roastDate, setRoastDate] = useState<string>("");
   const [manualExpires, setManualExpires] = useState<string>("");
   const [isOpen, setIsOpen] = useState(false);
@@ -55,7 +55,18 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
   const [origin, setOrigin] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Auto-calculo en vivo
+  // Sincroniza el form con el coffee cuando se abre el sheet
+  useEffect(() => {
+    if (!coffee) return;
+    setName(coffee.name);
+    setQuantityGrams(coffee.quantity_grams);
+    setRoastDate(coffee.roast_date ?? "");
+    setManualExpires(coffee.manual_expires_at ?? "");
+    setIsOpen(coffee.is_open);
+    setOpenedAt(coffee.opened_at ?? "");
+    setOrigin(coffee.origin ?? "");
+  }, [coffee]);
+
   const autoExpires = useMemo(() => {
     if (!roastDate) return null;
     return computeExpiration({
@@ -64,21 +75,13 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
       is_open: isOpen,
       opened_at: isOpen ? openedAt || TODAY : null,
     });
-  }, [roastDate, isOpen, openedAt]);
+  }, [roastDate, isOpen, openedAt, TODAY]);
 
-  function reset() {
-    setName("");
-    setQuantityGrams(340);
-    setRoastDate("");
-    setManualExpires("");
-    setIsOpen(false);
-    setOpenedAt("");
-    setOrigin("");
-  }
+  if (!coffee) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting) return;
+    if (!coffee || submitting) return;
     if (!name.trim()) return;
     if (!roastDate && !manualExpires) {
       toast.error("Necesito una fecha de vencimiento o de tueste");
@@ -91,7 +94,7 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
 
     setSubmitting(true);
     try {
-      await onSubmit({
+      await onUpdate(coffee.id, {
         name: name.trim(),
         quantity_grams: quantityGrams,
         roast_date: roastDate || null,
@@ -100,11 +103,10 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
         opened_at: isOpen ? openedAt || TODAY : null,
         origin: origin.trim() || null,
       });
-      toast.success(`${name.trim()} agregado`);
-      reset();
+      toast.success("Cambios guardados");
       onClose();
     } catch (err) {
-      console.error("addCoffee failed", err);
+      console.error("editCoffee failed", err);
       toast.error("No se pudo guardar. Intenta de nuevo.");
     } finally {
       setSubmitting(false);
@@ -112,29 +114,32 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Nuevo café">
+    <BottomSheet
+      open={coffee !== null}
+      onClose={onClose}
+      title={`Editar ${coffee.name}`}
+    >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <Field label="Nombre" htmlFor="add-name">
+        <Field label="Nombre" htmlFor="edit-name">
           <input
-            id="add-name"
+            id="edit-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="ej. Colombia Huila"
             required
-            autoFocus
             className="h-11 w-full rounded-md border border-border-strong bg-surface-raised px-3 text-base text-text placeholder:text-text-quiet focus:outline-none focus:ring-2 focus:ring-accent"
           />
         </Field>
 
-        <Field label="Cantidad (gramos)" htmlFor="add-grams">
+        <Field label="Cantidad (gramos)" htmlFor="edit-grams">
           <div className="flex flex-col gap-2">
             <input
-              id="add-grams"
+              id="edit-grams"
               type="number"
-              min={1}
+              min={0}
               value={quantityGrams}
-              onChange={(e) => setQuantityGrams(safeNumber(e.target.value, 1))}
+              onChange={(e) => setQuantityGrams(safeNumber(e.target.value, 0))}
               required
               className="h-11 w-full rounded-md border border-border-strong bg-surface-raised px-3 text-base font-mono tabular-nums text-text focus:outline-none focus:ring-2 focus:ring-accent"
             />
@@ -159,11 +164,11 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
 
         <Field
           label="Fecha de tueste (opcional)"
-          htmlFor="add-roast"
+          htmlFor="edit-roast"
           hint="Si la pones, calculo el vencimiento automático"
         >
           <input
-            id="add-roast"
+            id="edit-roast"
             type="date"
             value={roastDate}
             min={ONE_YEAR_AGO}
@@ -182,30 +187,28 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
         {!roastDate && (
           <Field
             label="Fecha de vencimiento"
-            htmlFor="add-expires"
-            hint="Lo necesitas si no tienes la fecha de tueste"
+            htmlFor="edit-expires"
           >
             <input
-              id="add-expires"
+              id="edit-expires"
               type="date"
               value={manualExpires}
-              min={TODAY}
               onChange={(e) => setManualExpires(e.target.value)}
               className="h-11 w-full rounded-md border border-border-strong bg-surface-raised px-3 text-base text-text focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </Field>
         )}
 
-        <Field label="Estado" htmlFor="add-state">
+        <Field label="Estado" htmlFor="edit-state">
           <div className="flex items-center justify-between rounded-md border border-border-strong bg-surface-raised px-3 py-2">
             <label
-              htmlFor="add-state"
+              htmlFor="edit-state"
               className="text-base text-text cursor-pointer select-none"
             >
               {isOpen ? "Abierto" : "Sellado"}
             </label>
             <button
-              id="add-state"
+              id="edit-state"
               type="button"
               role="switch"
               aria-checked={isOpen}
@@ -224,9 +227,9 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
         </Field>
 
         {isOpen && roastDate && (
-          <Field label="Fecha de apertura" htmlFor="add-opened">
+          <Field label="Fecha de apertura" htmlFor="edit-opened">
             <input
-              id="add-opened"
+              id="edit-opened"
               type="date"
               value={openedAt}
               min={roastDate}
@@ -237,9 +240,9 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
           </Field>
         )}
 
-        <Field label="Origen (opcional)" htmlFor="add-origin">
+        <Field label="Origen (opcional)" htmlFor="edit-origin">
           <input
-            id="add-origin"
+            id="edit-origin"
             type="text"
             value={origin}
             onChange={(e) => setOrigin(e.target.value)}
@@ -253,7 +256,7 @@ export function AddCoffeeSheet({ open, onClose, onSubmit }: Props) {
           disabled={submitting}
           className="mt-2 inline-flex h-11 items-center justify-center rounded-md bg-accent px-4 text-base font-semibold text-text-on-accent transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:opacity-60"
         >
-          {submitting ? "Guardando..." : "Agregar café"}
+          {submitting ? "Guardando..." : "Guardar cambios"}
         </button>
       </form>
     </BottomSheet>

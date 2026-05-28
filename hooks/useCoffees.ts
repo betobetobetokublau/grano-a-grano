@@ -8,16 +8,21 @@
  * - UPDATE/DELETE usan optimistic + rollback automatico si Supabase rechaza
  * - INSERT NO usa optimistic (evita ghost rows con id falso) — espera respuesta
  *   real del server antes de agregar a la lista
- * - expires_at se computa client-side, nunca se almacena
+ * - expires_at se computa client-side y se cachea (depende solo de los inputs)
+ * - days_left NO se cachea — se computa al render en componentes (depende de "now")
  */
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 
 import { createClient } from "@/lib/supabase/client";
-import { daysUntilExpiration } from "@/lib/dates";
 import { computeExpiration } from "@/lib/expiration";
-import type { Coffee, CoffeeInsert, CoffeeWithComputed } from "@/types/coffee";
+import { daysUntilExpiration } from "@/lib/dates";
+import type {
+  Coffee,
+  CoffeeInsert,
+  CoffeeWithComputed,
+} from "@/types/coffee";
 
 const SWR_KEY = "coffees";
 
@@ -31,21 +36,28 @@ function enrichCoffee(coffee: Coffee): CoffeeWithComputed {
   return {
     ...coffee,
     expires_at: expiresAt,
-    days_left: expiresAt === null ? null : daysUntilExpiration(expiresAt),
   };
 }
 
-function sortByUrgency(coffees: CoffeeWithComputed[]): CoffeeWithComputed[] {
+/**
+ * Ordena por dias restantes (computados al momento del sort).
+ * Cafes sin fecha al final.
+ */
+function sortByUrgency(
+  coffees: CoffeeWithComputed[],
+  now: Date = new Date(),
+): CoffeeWithComputed[] {
   return [...coffees].sort((a, b) => {
-    // Cafes sin fecha al final
-    if (a.days_left === null && b.days_left === null) return 0;
-    if (a.days_left === null) return 1;
-    if (b.days_left === null) return -1;
-    return a.days_left - b.days_left;
+    const ad = a.expires_at === null ? null : daysUntilExpiration(a.expires_at, now);
+    const bd = b.expires_at === null ? null : daysUntilExpiration(b.expires_at, now);
+    if (ad === null && bd === null) return 0;
+    if (ad === null) return 1;
+    if (bd === null) return -1;
+    return ad - bd;
   });
 }
 
-async function fetcher(): Promise<CoffeeWithComputed[]> {
+async function fetcher(): Promise<Coffee[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("coffees")
@@ -53,27 +65,26 @@ async function fetcher(): Promise<CoffeeWithComputed[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  return sortByUrgency((data ?? []).map(enrichCoffee));
+  return data ?? [];
 }
 
 export function useCoffees() {
-  const { data, error, isLoading, mutate } = useSWR<CoffeeWithComputed[]>(
-    SWR_KEY,
-    fetcher,
-    {
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-    },
+  const { data, error, isLoading, mutate } = useSWR<Coffee[]>(SWR_KEY, fetcher, {
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
+    dedupingInterval: 2000,
+  });
+
+  // Enriquece y ordena en memoria, no en cache.
+  // Asi days_left siempre se computa con "hoy" actual cuando un consumer lo calcula.
+  const coffees = useMemo(
+    () => sortByUrgency((data ?? []).map(enrichCoffee)),
+    [data],
   );
 
-  const supabase = createClient();
-
-  /**
-   * Insert sin optimistic. Espera respuesta del server con el id real.
-   * Throw el error para que el caller lo capture y muestre toast.
-   */
   const addCoffee = useCallback(
     async (input: Omit<CoffeeInsert, "user_id" | "id" | "created_at">) => {
+      const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -88,78 +99,60 @@ export function useCoffees() {
       if (insertError) throw insertError;
       if (!inserted) throw new Error("Insert no retorno data");
 
-      // Refetch para tener la lista ordenada correctamente
       await mutate();
       return inserted;
     },
-    [supabase, mutate],
+    [mutate],
   );
 
-  /**
-   * Update con optimistic. Si falla, SWR re-fetchea automaticamente y
-   * el rollback es transparente porque el current cache se reemplaza.
-   */
   const updateCoffee = useCallback(
     async (id: string, updates: Partial<Coffee>) => {
-      const current = data ?? [];
-      const optimistic = sortByUrgency(
-        current.map((c) => (c.id === id ? enrichCoffee({ ...c, ...updates }) : c)),
+      await mutate(
+        async (current) => {
+          const supabase = createClient();
+          const { error: updateError } = await supabase
+            .from("coffees")
+            .update(updates)
+            .eq("id", id);
+          if (updateError) throw updateError;
+          // Refetch fresh
+          return await fetcher();
+        },
+        {
+          optimisticData: (current) =>
+            (current ?? []).map((c) => (c.id === id ? { ...c, ...updates } : c)),
+          rollbackOnError: true,
+          revalidate: false,
+        },
       );
-
-      try {
-        await mutate(
-          async () => {
-            const { error: updateError } = await supabase
-              .from("coffees")
-              .update(updates)
-              .eq("id", id);
-            if (updateError) throw updateError;
-            return fetcher();
-          },
-          {
-            optimisticData: optimistic,
-            rollbackOnError: true,
-            revalidate: false, // ya re-fetcheamos dentro del mutate
-          },
-        );
-      } catch (err) {
-        // Re-throw para que el caller muestre toast
-        throw err;
-      }
     },
-    [data, supabase, mutate],
+    [mutate],
   );
 
   const deleteCoffee = useCallback(
     async (id: string) => {
-      const current = data ?? [];
-      const optimistic = current.filter((c) => c.id !== id);
-
-      try {
-        await mutate(
-          async () => {
-            const { error: deleteError } = await supabase
-              .from("coffees")
-              .delete()
-              .eq("id", id);
-            if (deleteError) throw deleteError;
-            return optimistic;
-          },
-          {
-            optimisticData: optimistic,
-            rollbackOnError: true,
-            revalidate: false,
-          },
-        );
-      } catch (err) {
-        throw err;
-      }
+      await mutate(
+        async (current) => {
+          const supabase = createClient();
+          const { error: deleteError } = await supabase
+            .from("coffees")
+            .delete()
+            .eq("id", id);
+          if (deleteError) throw deleteError;
+          return (current ?? []).filter((c) => c.id !== id);
+        },
+        {
+          optimisticData: (current) => (current ?? []).filter((c) => c.id !== id),
+          rollbackOnError: true,
+          revalidate: false,
+        },
+      );
     },
-    [data, supabase, mutate],
+    [mutate],
   );
 
   return {
-    coffees: data ?? [],
+    coffees,
     isLoading,
     error,
     addCoffee,

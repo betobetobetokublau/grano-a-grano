@@ -8,12 +8,23 @@
  */
 
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/lib/database.types";
 
-export function createClient() {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+/**
+ * Singleton client por modulo. @supabase/ssr internamente cachea pero el
+ * wrapper se reinstanciaba en cada render, lo cual rompia useCallback
+ * memoization. Esto evita el problema.
+ */
+let _client: SupabaseClient<Database> | null = null;
+
+export function createClient(): SupabaseClient<Database> {
+  if (!_client) {
+    _client = createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+  }
+  return _client;
 }

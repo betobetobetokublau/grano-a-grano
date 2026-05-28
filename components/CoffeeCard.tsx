@@ -4,9 +4,12 @@
  *
  * Layout: dot de urgencia | nombre + meta | dias restantes.
  * Visual: ver DESIGN.md y el wireframe original.
+ *
+ * IMPORTANTE: computa daysLeft + urgency al render (no cachea) para que
+ * la respuesta visual sea consistente al cruzar medianoche.
  */
 
-import { URGENCY_TEXT_CLASS } from "@/lib/urgency";
+import { URGENCY_TEXT_CLASS, getCoffeeUrgency } from "@/lib/urgency";
 import type { CoffeeWithComputed } from "@/types/coffee";
 
 import { StatusBadge } from "./StatusBadge";
@@ -14,19 +17,19 @@ import { UrgencyDot } from "./UrgencyDot";
 
 type Props = {
   coffee: CoffeeWithComputed;
-  urgency: import("@/lib/urgency").UrgencyLevel;
   onClick: () => void;
 };
 
 function formatDaysLabel(days: number | null): { number: string; label: string } {
   if (days === null) return { number: "—", label: "sin fecha" };
-  if (days < 0) return { number: `${Math.abs(days)}d`, label: "vencido" };
+  if (days < 0) return { number: `−${Math.abs(days)}d`, label: "vencido" };
   if (days === 0) return { number: "Hoy", label: "vence" };
   return { number: `${days}d`, label: "quedan" };
 }
 
-export function CoffeeCard({ coffee, urgency, onClick }: Props) {
-  const { number, label } = formatDaysLabel(coffee.days_left);
+export function CoffeeCard({ coffee, onClick }: Props) {
+  const { daysLeft, level: urgency } = getCoffeeUrgency(coffee);
+  const { number, label } = formatDaysLabel(daysLeft);
   const isExpired = urgency === "expired";
 
   return (

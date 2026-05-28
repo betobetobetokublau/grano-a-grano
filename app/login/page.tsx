@@ -11,7 +11,13 @@ import { LoginForm } from "./login-form";
  * el card centrado con el form de magic link. Es la unica ruta "marketing-adjacent"
  * del producto — el resto es app.
  */
-export default async function LoginPage() {
+type SearchParams = Promise<{ error?: string }>;
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -21,9 +27,15 @@ export default async function LoginPage() {
     redirect("/");
   }
 
+  const { error } = await searchParams;
+  const callbackError =
+    error === "callback_failed"
+      ? "El link expiró o ya se usó. Pide uno nuevo."
+      : null;
+
   return (
     <main className="flex min-h-full flex-1 items-center justify-center p-4">
-      <div className="w-full max-w-[360px] rounded-lg border border-border bg-surface-raised p-8">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-surface-raised p-8">
         <div className="flex flex-col items-center text-center">
           <span aria-hidden="true" className="text-4xl">
             ☕
@@ -31,6 +43,15 @@ export default async function LoginPage() {
           <h1 className="mt-4 text-2xl font-bold text-text">Grano a Grano</h1>
           <p className="mt-1 text-sm text-text-muted">Tu inventario de café</p>
         </div>
+
+        {callbackError && (
+          <div
+            role="alert"
+            className="mt-6 rounded-md bg-toast-error-bg px-3 py-2 text-sm text-toast-error-text"
+          >
+            {callbackError}
+          </div>
+        )}
 
         <div className="mt-8">
           <LoginForm />

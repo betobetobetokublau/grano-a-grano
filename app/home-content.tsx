@@ -7,25 +7,32 @@
  * - Secciones "Por vencer pronto" (<7d) vs "En buen estado" (>=7d)
  * - Toggle "Ver terminados" (cafes con 0g)
  * - FAB para agregar
- * - Sheets: AddCoffee, CoffeeDetail
+ * - Sheets: AddCoffee, CoffeeDetail, EditCoffee
+ * - LogoutButton en header
+ * - Listener de auth: si la sesion expira, redirige a /login
  *
  * Estados de UI: loading (skeleton), error (toast + retry), empty (mensaje calido),
  * data (lista normal).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { AddCoffeeSheet } from "@/components/AddCoffeeSheet";
 import { CoffeeCard } from "@/components/CoffeeCard";
 import { CoffeeDetailSheet } from "@/components/CoffeeDetailSheet";
+import { EditCoffeeSheet } from "@/components/EditCoffeeSheet";
 import { EmptyState } from "@/components/EmptyState";
+import { LogoutButton } from "@/components/LogoutButton";
 import { SkeletonCards } from "@/components/SkeletonCards";
 import { SummaryStats } from "@/components/SummaryStats";
 import { useCoffees } from "@/hooks/useCoffees";
-import { urgencyLevel } from "@/lib/urgency";
+import { daysUntilExpiration } from "@/lib/dates";
+import { createClient } from "@/lib/supabase/client";
 
 export function HomeContent() {
+  const router = useRouter();
   const {
     coffees,
     isLoading,
@@ -38,32 +45,47 @@ export function HomeContent() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [showFinished, setShowFinished] = useState(false);
 
+  // Escucha cambios de auth para reaccionar a sign-out / sesion expirada
+  useEffect(() => {
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        router.replace("/login");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [router]);
+
+  const now = new Date();
   const activeCoffees = coffees.filter((c) => c.quantity_grams > 0);
   const finishedCoffees = coffees.filter((c) => c.quantity_grams === 0);
 
-  const urgent = activeCoffees.filter(
-    (c) => c.days_left !== null && c.days_left < 7,
-  );
-  const healthy = activeCoffees.filter(
-    (c) => c.days_left === null || c.days_left >= 7,
-  );
+  const urgent = activeCoffees.filter((c) => {
+    if (c.expires_at === null) return false;
+    return daysUntilExpiration(c.expires_at, now) < 7;
+  });
+  const healthy = activeCoffees.filter((c) => {
+    if (c.expires_at === null) return true;
+    return daysUntilExpiration(c.expires_at, now) >= 7;
+  });
 
   const selected = coffees.find((c) => c.id === detailId) ?? null;
-  const selectedUrgency =
-    selected && selected.days_left !== null
-      ? urgencyLevel(selected.days_left)
-      : selected
-        ? ("green" as const)
-        : null;
+  const editing = coffees.find((c) => c.id === editId) ?? null;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col bg-surface">
       {/* Header */}
-      <header className="border-b border-border bg-surface-raised px-4 py-4">
-        <h1 className="text-2xl font-bold text-text">Grano a Grano</h1>
-        <p className="text-sm text-text-muted">Tu inventario de café</p>
+      <header className="flex items-center justify-between border-b border-border bg-surface-raised px-4 py-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text">Grano a Grano</h1>
+          <p className="text-sm text-text-muted">Tu inventario de café</p>
+        </div>
+        <LogoutButton />
       </header>
 
       {/* Summary (siempre visible aunque este vacio) */}
@@ -84,7 +106,6 @@ export function HomeContent() {
                 <CoffeeCard
                   key={c.id}
                   coffee={c}
-                  urgency={urgencyLevel(c.days_left ?? 999)}
                   onClick={() => setDetailId(c.id)}
                 />
               ))}
@@ -97,7 +118,6 @@ export function HomeContent() {
                 <CoffeeCard
                   key={c.id}
                   coffee={c}
-                  urgency={urgencyLevel(c.days_left ?? 999)}
                   onClick={() => setDetailId(c.id)}
                 />
               ))}
@@ -122,7 +142,6 @@ export function HomeContent() {
                     <CoffeeCard
                       key={c.id}
                       coffee={c}
-                      urgency="expired"
                       onClick={() => setDetailId(c.id)}
                     />
                   ))}
@@ -156,10 +175,19 @@ export function HomeContent() {
 
       <CoffeeDetailSheet
         coffee={selected}
-        urgency={selectedUrgency}
         onClose={() => setDetailId(null)}
+        onEdit={(id) => {
+          setDetailId(null);
+          setEditId(id);
+        }}
         onUpdate={updateCoffee}
         onDelete={deleteCoffee}
+      />
+
+      <EditCoffeeSheet
+        coffee={editing}
+        onClose={() => setEditId(null)}
+        onUpdate={updateCoffee}
       />
     </div>
   );
