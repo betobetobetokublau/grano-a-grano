@@ -57,14 +57,19 @@ lib/
   supabase/
     client.ts              Cliente Supabase para Client Components
     server.ts              Cliente Supabase para Server Components
-    middleware.ts          Helper que refresca la sesión en cada request
   database.types.ts        Tipos TypeScript generados desde el schema
   expiration.ts            Cálculo puro de vencimiento (sellado/abierto)
   urgency.ts               Banda de urgencia por días restantes
   dates.ts                 Helpers de fechas en timezone local
-proxy.ts                   Entry point que llama a updateSession()
 supabase/migrations/       SQL versionado del schema
+vercel.json                Forza framework=nextjs (workaround del bug de auto-deteccion)
 ```
+
+> **Nota:** No tenemos middleware/proxy.ts todavía. Next.js 16 + Vercel + Turbopack tienen un bug
+> conocido que rompe el middleware en producción (`__dirname` no definido en Edge, o ESM/CJS
+> mismatch en Node runtime). El refresh automático de sesión está diferido hasta que el bug
+> se arregle (ver TODOS.md). Mientras tanto, Supabase JS client refresca la sesión por su
+> cuenta en el browser.
 
 ## Migrations
 

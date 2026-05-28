@@ -2,6 +2,16 @@
 
 Items diferidos del CEO review (2026-05-27). Prioridad estimada post-MVP.
 
+## P1 — Bloqueado por bug externo
+
+### Re-agregar middleware de auto-refresh de sesion Supabase
+- **Que:** Volver a crear `middleware.ts` en la raiz + `lib/supabase/session.ts` con la funcion `updateSession()` que refresca el JWT en cada request.
+- **Por que:** Sin este middleware, la sesion se refresca solo cuando el cliente JS de Supabase lo hace en el browser. Funciona, pero menos eficiente, y puede causar requests de servidor sin auth fresca.
+- **Bloqueado por:** Bug de Next.js 16.2.6 + Vercel + Turbopack. El bundle de middleware en Edge runtime falla con `ReferenceError: __dirname is not defined`. Forzar Node.js runtime falla con `SyntaxError: Cannot use import statement outside a module` (CJS/ESM mismatch). Probado el 2026-05-28.
+- **Que esperar:** Vercel y/o Next.js arreglen el bundling de middleware. Revisar cuando salga Next.js 16.3 o 17, o cuando Vercel publique fix.
+- **Esfuerzo:** S (CC: ~5 min cuando este desbloqueado)
+- **Como verificar:** Recrear los archivos del commit anterior, deploy, ver si la URL responde 200 sin MIDDLEWARE_INVOCATION_FAILED.
+
 ## P2 — Post-MVP v1.1
 
 ### PWA Instalable
