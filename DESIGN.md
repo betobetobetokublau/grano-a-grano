@@ -93,6 +93,12 @@ Approach: **restrained + semantic**. Stone warm como base, urgency colors como Ã
 | Abierto | `#FEF3C7` | `#92400E` | amber-100 + amber-800 |
 | Sellado | `#E0E7FF` | `#3730A3` | indigo-100 + indigo-800 |
 
+### Overlay (backdrop de bottom sheets)
+
+| Token | Value | Uso |
+|-------|-------|-----|
+| `--color-overlay` | `rgba(28, 25, 23, 0.5)` (stone-900 @ 50%) | Backdrop dim debajo de bottom sheets |
+
 ### Toasts (feedback de acciones)
 
 | Tipo | BG hex | Text hex |

@@ -41,6 +41,9 @@
   --color-badge-sealed-bg: #e0e7ff;
   --color-badge-sealed-text: #3730a3;
 
+  /* Overlay (backdrop de bottom sheet) */
+  --color-overlay: rgba(28, 25, 23, 0.5);
+
   /* Toasts */
   --color-toast-success-bg: #1c1917;
   --color-toast-success-text: #fafaf9;
