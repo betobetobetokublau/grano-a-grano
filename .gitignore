@@ -1,20 +1,28 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
 # Dependencies
-node_modules/
-.pnp
-.pnp.js
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
 # Next.js build
-.next/
-out/
-build/
-
-# Production
+/.next/
+/out/
+/build/
 dist/
 
-# Env vars (NEVER commit these)
+# Production
+build/
+
+# Env vars (NEVER commit these — credentials live here)
 .env
-.env.local
 .env*.local
+.env.local
 
 # Editor / OS
 .DS_Store
@@ -22,6 +30,7 @@ dist/
 *.swo
 .vscode/
 .idea/
+*.pem
 
 # Logs
 *.log
@@ -40,5 +49,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Coverage
-coverage/
+# Testing
+/coverage/
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
+
+# Temporary backup
+.gitignore.bak
+.vercel
