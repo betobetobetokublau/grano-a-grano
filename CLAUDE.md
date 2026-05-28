@@ -35,7 +35,7 @@ Spec completa: `~/.gstack/projects/grano-a-grano/albertolopez-main-design-202605
 Sí — Supabase con Auth (magic link) y RLS. Tabla única `coffees` con FK a `auth.users`.
 
 ## Sistema visual
-Mood: cálido y utilitario (cocina bien organizada). Tonos warm stone, tipografía limpia, cero decoración. DESIGN.md se genera en sub-flow de `/design-consultation`.
+Mood: cálido y utilitario (cocina bien organizada). Tonos warm stone, Geist Sans + Mono, urgencia con dots de color (rojo→verde) en vez de backgrounds saturados. Spec completa: `DESIGN.md` en la raíz. Tokens: `app/globals.css`.
 
 ---
 
@@ -150,22 +150,27 @@ que respetar**. Esto NO es opcional ni "best practice" — es un guardrail
 duro.
 
 **Fuentes de verdad** (en este orden):
-1. `DESIGN.md` (si existe en la raíz del proyecto) — palette, typography,
-   spacing, radii, sombras, motion. Es el contrato del sistema.
-2. `globals.css` (o el equivalente del framework) — los tokens reales como
-   variables CSS (ej. `--c-accent`, `--c-bg`) y utilidades de Tailwind
-   construidas con `@utility` / `@theme`. Es la implementación.
+1. `DESIGN.md` — palette, typography, spacing, radii, motion. Es el contrato del sistema. **Ya existe en la raíz del proyecto.**
+2. `app/globals.css` — los tokens reales como variables CSS dentro del bloque `@theme` de Tailwind 4. Es la implementación.
 
-**Antes de cualquier decisión visual** (color, tipografía, spacing, radius,
-shadow, animación, motion):
+**Antes de cualquier decisión visual** (color, tipografía, spacing, radius, shadow, animación, motion):
 
-1. Lee `DESIGN.md` y `globals.css` PRIMERO.
+1. Lee `DESIGN.md` y `app/globals.css` PRIMERO.
 2. Usa solo los tokens que ya están definidos ahí.
-3. Si `DESIGN.md` todavía no existe: NO inventes UI definitiva. Usa
-   neutros (stone / gray) y avísame que tengo que correr el sub-flow
-   de diseño (`https://raicode.ai
-/wizard/68f0a487-5518-4901-bb36-fd47a0b7dcaf/setup-design`)
-   antes de que armemos pantallas reales.
+
+**Tokens disponibles (referencia rápida — para detalle ver DESIGN.md):**
+
+- **Surfaces:** `bg-surface` (`#FAFAF9` fondo app), `bg-surface-raised` (`#FFFFFF` cards), `bg-surface-sunken` (`#F5F5F4`), `border-border` (`#E7E5E4`), `border-border-strong` (`#D6D3D1`)
+- **Text:** `text-text` (`#1C1917` primario), `text-text-muted` (`#78716C`), `text-text-quiet` (`#A8A29E`), `text-text-on-accent` (`#FAFAF9`)
+- **Accent (FAB + CTAs):** `bg-accent` (`#44403C` café-grano), `hover:bg-accent-hover` (`#292524`)
+- **Urgency (solo en dots + days-left number — nunca background):** `bg-urgency-red` (`#DC2626` <3d), `bg-urgency-orange` (`#EA580C` 3-7d), `bg-urgency-yellow` (`#CA8A04` 7-14d), `bg-urgency-green` (`#16A34A` >14d), `bg-urgency-expired` (`#A8A29E` vencido + strikethrough)
+- **Badges:** Abierto `bg-badge-open-bg`/`text-badge-open-text`, Sellado `bg-badge-sealed-bg`/`text-badge-sealed-text`
+- **Toasts:** success `bg-toast-success-bg`/`text-toast-success-text`, warning idem, error idem
+- **Radius:** `rounded-sm` (6px), `rounded-md` (10px), `rounded-lg` (14px), `rounded-full` (9999px)
+- **Font families:** `font-sans` (Geist Sans, default), `font-mono` (Geist Mono, para números cuando deban alinear vertical)
+- **Spacing:** escala estándar de Tailwind (4px base) — `gap-2` 8px, `gap-3` 12px, `gap-4` 16px, `gap-6` 24px, `gap-8` 32px, `gap-12` 48px
+- **Touch targets:** mínimo `h-11` (44px) en botones, links, toggles, pills
+- **Duration:** 150ms (toasts/hover), 250ms (bottom sheet), 300ms (card fade-out)
 
 **Prohibiciones absolutas** (esto es lo que blinda contra el Frankenstein):
 
